@@ -1,50 +1,75 @@
 
+# ==========================================
 # Python
+# ==========================================
 __pycache__/
 *.py[cod]
 *.so
 
-# Virtual Environment
+# Virtual Environments
 .venv/
 venv/
 env/
 
-# Testing
+# Testing & Coverage
 .pytest_cache/
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
 
-# Environment Variables
+# Ruff Cache
+.ruff_cache/
+
+# Environment Variables & Secrets
 .env
 .env.*
+!.env.example
 
-# IDE
+# ==========================================
+# Terraform
+# ==========================================
+
+# Terraform working directory
+**/.terraform/*
+
+# Terraform state files
+*.tfstate
+*.tfstate.*
+
+# Terraform plans
+*.tfplan
+*.tfplan.*
+
+# Terraform crash logs
+crash.log
+crash.*.log
+
+# Local variable files
+*.tfvars.local
+*.auto.tfvars
+*.auto.tfvars.json
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# ==========================================
+# Credentials & Private Keys
+# ==========================================
+*.pem
+*.key
+
+# ==========================================
+# IDE & Editor
+# ==========================================
 .vscode/
 .idea/
 
-# OS
+# ==========================================
+# Operating System
+# ==========================================
 .DS_Store
 Thumbs.db
-# Python coverage
-.coverage
-.coverage.*
-htmlcov/
-
-# Ruff cache
-.ruff_cache/
-
-# Pytest cache
-.pytest_cache/
-
-# Python bytecode
-__pycache__/
-*.py[cod]
-
-# Virtual environments
-.venv/
-venv/
-env/
-
-# Environment variables
-.env
-.env.*
