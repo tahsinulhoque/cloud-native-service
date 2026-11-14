@@ -9,13 +9,13 @@ systemctl enable docker
 systemctl start docker
 
 # Pull application image
-docker pull ${IMAGE}
+docker pull "${IMAGE}"
 
 # Run application container with CloudWatch logging
 docker run -d \
   --name cloud-native-service \
   --restart unless-stopped \
-  -e ENVIRONMENT=${ENVIRONMENT} \
+  -e "ENVIRONMENT=${ENVIRONMENT}" \
   -p 80:8000 \
   --log-driver=awslogs \
   --log-opt awslogs-region=us-west-2 \
