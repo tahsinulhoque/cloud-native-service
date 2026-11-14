@@ -19,6 +19,6 @@ docker run -d \
   -p 80:8000 \
   --log-driver=awslogs \
   --log-opt awslogs-region=us-west-2 \
-  --log-opt awslogs-group=/cloud-native-service/${ENVIRONMENT} \
+  --log-opt "awslogs-group=/cloud-native-service/${ENVIRONMENT}" \
   --log-opt awslogs-create-group=false \
-  ${IMAGE}
+  "${IMAGE}"
