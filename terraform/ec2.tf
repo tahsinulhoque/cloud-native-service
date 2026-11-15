@@ -50,8 +50,11 @@ resource "aws_instance" "app" {
     http_tokens   = "required"
   }
 
+  # Resource tags for identification and IAM access control
   tags = {
-    Name = "${var.project_name}-${var.environment}-ec2"
+    Name        = "${var.project_name}-${var.environment}-ec2"
+    Project     = var.project_name
+    Environment = var.environment
   }
 
   # Ensure IAM permissions and CloudWatch log group exist first

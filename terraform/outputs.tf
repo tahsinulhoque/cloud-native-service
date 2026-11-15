@@ -1,4 +1,3 @@
-
 output "ec2_instance_id" {
   description = "ID of the application EC2 instance"
   value       = aws_instance.app.id
@@ -22,4 +21,9 @@ output "application_url" {
 output "vpc_id" {
   description = "ID of the custom VPC"
   value       = aws_vpc.main.id
+}
+
+output "github_actions_role_arn" {
+  description = "IAM Role ARN for GitHub Actions OIDC"
+  value       = aws_iam_role.github_actions.arn
 }
