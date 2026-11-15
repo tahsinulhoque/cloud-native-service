@@ -888,25 +888,87 @@ This workflow uses Prometheus metrics and Loki logs together in Grafana to inves
 
 ---
 
-## Linux Automation
 
-**Status: Planned / In Progress**
+## Linux Automation — System Health Monitoring
 
-The `system_health.sh` script will provide:
+The `scripts/system_health.sh` Bash script collects system health information and records timestamped reports.
+
+### Features
 
 - CPU utilization
 - Memory utilization
-- Disk usage
-- Load average
-- Top five memory-consuming processes
-- JSON output
+- Disk usage across mounted filesystems
+- System load average
+- Top 5 processes by memory usage
+- JSON output support
 - Configurable warning thresholds
-- Timestamped health logs
-- Log rotation
-- Meaningful exit codes
-- Cron or systemd scheduling
+- Timestamped logging in `health_log.txt`
+- Basic log rotation (5 MB)
+- Meaningful exit codes:
+  - `0` — Healthy
+  - `1` — Warning
+  - `2` — Critical
 
----
+### Run the Health Script
+
+Run the script using Bash:
+
+```bash
+bash ./scripts/system_health.sh
+```
+
+### JSON Output
+
+```bash
+bash ./scripts/system_health.sh --json
+```
+
+### Custom Thresholds
+
+```bash
+bash ./scripts/system_health.sh --disk 80 --cpu 90 --mem 85
+```
+
+### Help
+
+```bash
+bash ./scripts/system_health.sh --help
+```
+
+### Log File
+
+Reports are appended to:
+
+```text
+health_log.txt
+```
+
+When the log reaches 5 MB, the existing log is rotated to `health_log.txt.1`.
+
+### Cron Scheduling
+
+To execute the health script every five minutes on a Linux server:
+
+1. Make the script executable:
+
+```bash
+chmod +x scripts/system_health.sh
+```
+
+2. Open the crontab:
+
+```bash
+crontab -e
+```
+
+3. Add the following entry, replacing the path with the absolute project path:
+
+```cron
+*/5 * * * * /absolute/path/to/cloud-native-service/scripts/system_health.sh
+```
+
+The script records each execution in `health_log.txt`.
+
 
 ## Architecture – End-to-End Workflow
 

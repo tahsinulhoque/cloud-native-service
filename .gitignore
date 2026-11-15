@@ -73,3 +73,7 @@ override.tf.json
 # ==========================================
 .DS_Store
 Thumbs.db
+
+# System Health Logs
+health_log.txt
+health_log.txt.*

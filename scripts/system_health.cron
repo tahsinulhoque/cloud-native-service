@@ -1,0 +1,1 @@
+*/5 * * * * /path/to/cloud-native-service/scripts/system_health.sh
