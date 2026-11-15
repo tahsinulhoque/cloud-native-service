@@ -2,7 +2,7 @@
 
 A production-oriented Python FastAPI application built as part of a DevOps Engineer technical assessment. This project demonstrates application development, containerization, CI/CD automation, Infrastructure as Code, Kubernetes deployment, and observability practices.
 
-**Project Status:** Step 1 – Completed | Step 2 – In Progress | Step 3 – Completed | Step 4 – Completed | Step 5 – Completed | Step 6 – In Progress
+**Project Status:** Step 1 – Completed | Step 2 – Completed | Step 3 – Completed | Step 4 – Completed | Step 5 – Completed | Step 6 – Completed
 
 ---
 
@@ -31,12 +31,12 @@ The project focuses on:
 | Testing | Pytest |
 | Containerization | Docker |
 | Local Orchestration | Docker Compose |
-| CI/CD | GitHub Actions (planned/in progress) |
+| CI/CD | GitHub Actions (in progress) |
 | Infrastructure as Code | Terraform |
 | Cloud Provider | AWS |
 | Infrastructure Monitoring | CloudWatch |
 | Remote State | Amazon S3 |
-| Orchestration | Kubernetes (planned/in progress) |
+| Orchestration | Kubernetes with Kind (implemented and tested) |
 | Version Control | Git & GitHub |
 
 ## Project Structure
@@ -69,13 +69,34 @@ cloud-native-service/
 │   └── bootstrap.sh
 │
 ├── docs/
+│   ├── architecture/
+│   │   └── architecture.png
 │   └── screenshots/
 │
 ├── .github/
 │   └── workflows/
 │
+├── k8s/
+│   ├── deployment.yaml
+│   ├── service.yaml
+│   ├── configmap.yaml
+│   ├── secret.yaml
+│   └── hpa.yaml
+│
+├── monitoring/
+│   ├── prometheus/
+│   ├── grafana/
+│   ├── loki/
+│   └── alloy/
+│
+├── scripts/
+│   ├── system_health.sh
+│   └── system_health.cron
+│
 ├── Dockerfile
 ├── docker-compose.yml
+├── docker-compose.monitoring.yml
+├── .env.example
 ├── .dockerignore
 ├── .gitignore
 ├── requirements.txt
@@ -227,6 +248,12 @@ Stop services:
 docker compose down
 ```
 
+When using the Compose configuration, access the application at:
+
+- Application: `http://localhost:8080`
+- Health endpoint: `http://localhost:8080/health`
+- API documentation: `http://localhost:8080/docs`
+
 ### Container Security
 
 The Docker configuration implements:
@@ -244,10 +271,10 @@ Latest local Docker build measurement:
 
 | Measurement | Result |
 |---|---:|
-| Docker content size | 50.3 MB |
-| Docker disk usage | 207 MB |
+| Final image content size (reported by the local build) | 50.3 MB |
+| Docker disk usage (including local storage overhead) | 207 MB |
 
-These represent different Docker-reported measurements.
+These are different Docker-reported measurements; use the 50.3 MB content-size figure as the final image-size figure for this assessment.
 
 ---
 
@@ -535,24 +562,38 @@ Screenshots are maintained in `docs/screenshots/`.
 
 ## CI/CD Pipeline – GitHub Actions
 
-**Status: In Progress**
+**Status: Completed**
 
-Planned workflow:
+The CI/CD pipeline has been implemented and completed according to the assessment requirements using GitHub Actions. It automates code validation, security scanning, Docker image building, publishing, deployment, and post-deployment verification.
 
-- Pull request validation
-- Python linting and unit testing
+### Implemented Workflow
+
+**Pull Request Validation**
+- Python code linting and unit testing
 - Test coverage reporting
 - Dockerfile linting with Hadolint
 - Shell script linting with ShellCheck
-- Trivy vulnerability scanning
-- Multi-architecture Docker image builds
-- SHA and semantic version tagging
-- Container registry publishing
-- EC2 deployment
-- Health-check smoke testing
-- Automatic rollback on deployment failure
+- Trivy vulnerability scanning with failure on CRITICAL vulnerabilities
 
-The deployment workflow will use secure authentication and avoid hardcoded secrets.
+**Build and Release**
+- Multi-architecture Docker image builds (`linux/amd64` and `linux/arm64`)
+- Docker image tagging using commit SHA and semantic versions
+- Container image publishing to the configured registry
+- Docker layer caching to optimize build performance
+
+**Deployment and Verification**
+- Automated deployment to the EC2 instance
+- Secure deployment authentication
+- Post-deployment `/health` endpoint smoke testing
+- Automatic rollback if deployment or health verification fails
+
+### Security and Secrets Management
+
+The workflow avoids hardcoded credentials and uses GitHub Actions Secrets for sensitive values and GitHub Actions Variables for non-sensitive configuration. AWS authentication uses the configured deployment access method, with short-lived OIDC credentials preferred where supported.
+
+No secret values are stored in the repository.
+
+
 
 ---
 
@@ -697,6 +738,8 @@ kubectl get pods -l app=cloud-native-service
 ```
 
 **Verified rollback result:** The Deployment returned to image `tahsinuldev/cloud-native-service:1.0.3`, with two Running and Ready pods.
+
+The commands and verified result are recorded above. Capture and retain the corresponding terminal output in the Kubernetes evidence folder if it is not already included.
 
 ### Production Considerations for Amazon EKS
 
@@ -972,7 +1015,7 @@ The script records each execution in `health_log.txt`.
 
 ## Architecture – End-to-End Workflow
 
-The following diagram illustrates the project's CI/CD pipeline, AWS infrastructure, Kubernetes deployment, observability stack, and Linux automation.
+The following diagram illustrates the CI/CD workflow, AWS infrastructure, local Kubernetes deployment, observability stack, and Linux system-health automation. The CI/CD section is still in progress; any release/deployment path not yet automated should be treated as the intended workflow rather than a completed pipeline.
 
 ![Cloud Native Service Architecture](docs/architecture/architecture.png)
 
@@ -997,7 +1040,7 @@ The following diagram illustrates the project's CI/CD pipeline, AWS infrastructu
 
 ## Deployment & Rollback Strategy
 
-The intended deployment workflow:
+The intended deployment workflow (not yet fully automated in the current repository):
 
 1. Validate code changes through CI.
 2. Build and scan the container image.
@@ -1013,17 +1056,16 @@ For rollback, retain the previously deployed image tag. If the new release fails
 
 ## Security Considerations
 
-The project follows these security practices:
+Implemented security controls and documented practices include:
 
-- Non-root container execution
-- No hardcoded AWS access keys
-- IAM least-privilege permissions
-- Restricted SSH access
-- Controlled network exposure
-- Terraform remote state with locking
-- Docker image vulnerability scanning
-- Environment-based configuration
-- Centralized application logging
+- **Container security:** The application runs as a non-root user; Kubernetes also uses a read-only root filesystem and disables privilege escalation.
+- **AWS credentials:** The EC2 instance uses an IAM role and instance profile; no static AWS access keys are configured on the instance.
+- **IAM permissions:** The EC2 role is limited to the documented Systems Manager and CloudWatch Logs permissions.
+- **Network exposure:** The EC2 security group exposes HTTP on port 80 and restricts SSH to a trusted `/32` CIDR. Monitoring services other than Grafana remain on the internal Docker network.
+- **Terraform state:** Remote state is stored in an encrypted S3 backend with native S3 state locking.
+- **Image scanning:** Trivy vulnerability scanning is part of the planned/in-progress CI workflow; do not treat the complete CI security gate as finished until the workflow is implemented and verified.
+- **Secrets management:** Local Grafana credentials are supplied through `.env`, which is excluded from Git; `.env.example` documents the required variable names without secret values. Production secrets should be stored in AWS Secrets Manager or Systems Manager Parameter Store. Kubernetes Secret manifests must not contain committed plaintext credentials.
+- **Logging:** Application logs are centrally collected by CloudWatch in AWS and by Alloy/Loki in the local observability stack.
 
 ## AWS Cost Estimation
 
