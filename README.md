@@ -1060,6 +1060,27 @@ kubectl rollout status deployment/cloud-native-service
 
 Always verify the running image and readiness of the replicas after rollback.
 
+
+## AWS Staging Cleanup
+
+The staging deployment and automatic rollback
+were successfully tested using AWS EC2 and
+AWS Systems Manager (SSM).
+
+After completing the deployment tests and
+capturing the required evidence, all 15
+staging AWS resources were successfully
+destroyed to avoid ongoing infrastructure costs.
+
+The deployment workflow is retained in the
+repository. Re-running deployment requires
+reprovisioning the staging infrastructure and
+the GitHub Actions OIDC IAM role.
+
+Deployment and rollback evidence is available
+under `docs/screenshots/ci_cd/`.
+
+
 ## Security Considerations
 
 Implemented controls and operational practices include:
