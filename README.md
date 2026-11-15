@@ -558,25 +558,160 @@ The deployment workflow will use secure authentication and avoid hardcoded secre
 
 ## Kubernetes Deployment
 
-**Status: Planned / In Progress**
+**Status: Implemented and Tested**
 
-The Kubernetes deployment will use a local cluster such as kind, Minikube, or k3d.
+The application is deployed to a local Kubernetes cluster using Kind.
 
-Planned components:
+### Kubernetes Components
 
-- Kubernetes Deployment with at least two replicas
-- Rolling update strategy
-- Liveness and readiness probes
-- Kubernetes Service
-- Ingress or documented port-forward alternative
-- ConfigMap and Secret
-- CPU and memory requests and limits
-- Non-root security context
-- Read-only root filesystem
-- Horizontal Pod Autoscaler
-- Rollback demonstration
+| Component | Configuration |
+|---|---|
+| Cluster | Kind |
+| Deployment | cloud-native-service |
+| Replicas | 2 |
+| Update Strategy | RollingUpdate |
+| Max Surge | 1 |
+| Max Unavailable | 0 |
+| Service | ClusterIP |
+| Application Port | 8000 |
+| HPA | CPU-based |
+| Minimum Replicas | 2 |
+| Maximum Replicas | 5 |
+| CPU Target | 70% |
 
----
+### Kubernetes Manifests
+
+All application manifests are maintained under `k8s/`.
+
+- `deployment.yaml` — Application Deployment, probes, resources and security context.
+- `service.yaml` — Internal ClusterIP Service.
+- `configmap.yaml` — Application environment configuration.
+- `secret.yaml` — Kubernetes Secret resource.
+- `hpa.yaml` — CPU-based Horizontal Pod Autoscaler.
+
+### Security Configuration
+
+The application container runs with:
+
+- Non-root user (UID 999).
+- `allowPrivilegeEscalation: false`.
+- `readOnlyRootFilesystem: true`.
+- CPU and memory requests and limits.
+
+### Configuration and Secrets
+
+Application configuration is provided through a ConfigMap.
+
+The application currently has no sensitive environment variables that require a Secret. The Secret manifest does not contain credentials or sensitive values.
+
+For future sensitive configuration, create Kubernetes Secrets at deployment time using an external secret manager or a secure local environment/file. Do not commit plaintext credentials to Git.
+
+### Deploy to Kind
+
+Create the local cluster:
+
+```powershell
+kind create cluster --name cloud-native-service
+```
+
+Apply Kubernetes manifests:
+
+```powershell
+kubectl apply -f .\k8s\
+```
+
+Check deployment:
+
+```powershell
+kubectl get deployments
+kubectl get pods
+kubectl get services
+kubectl get hpa
+```
+
+### Access the Application
+
+A port-forward alternative is used instead of an Ingress:
+
+```powershell
+kubectl port-forward service/cloud-native-service 8080:8000
+```
+
+Test the endpoints from another terminal:
+
+```powershell
+Invoke-RestMethod http://localhost:8080/
+Invoke-RestMethod http://localhost:8080/health
+```
+
+### Horizontal Pod Autoscaling
+
+The HPA scales the application based on CPU utilization.
+
+```powershell
+kubectl top nodes
+kubectl top pods
+kubectl get hpa
+```
+
+The local Kind cluster uses Metrics Server to provide resource metrics.
+
+### Rolling Update
+
+A new application image was built and pushed to Docker Hub:
+
+```powershell
+docker build -t tahsinuldev/cloud-native-service:1.0.4 .
+docker push tahsinuldev/cloud-native-service:1.0.4
+```
+
+Update the Kubernetes Deployment:
+
+```powershell
+kubectl set image deployment/cloud-native-service cloud-native-service=tahsinuldev/cloud-native-service:1.0.4
+```
+
+Monitor the rollout:
+
+```powershell
+kubectl rollout status deployment/cloud-native-service
+kubectl get pods -l app=cloud-native-service
+```
+
+The rolling update completed successfully with two Ready replicas.
+
+### Rollback
+
+Rollback to the previous Deployment revision:
+
+```powershell
+kubectl rollout undo deployment/cloud-native-service
+```
+
+Verify the rollback:
+
+```powershell
+kubectl rollout status deployment/cloud-native-service
+kubectl get deployment cloud-native-service -o jsonpath="{.spec.template.spec.containers[0].image}"
+kubectl get pods -l app=cloud-native-service
+```
+
+**Verified rollback result:** The Deployment returned to image `tahsinuldev/cloud-native-service:1.0.3`, with two Running and Ready pods.
+
+### Production Considerations for Amazon EKS
+
+For a production EKS deployment:
+
+- Use an AWS Load Balancer Controller or another supported Ingress controller.
+- Integrate AWS Secrets Manager or another managed secrets solution.
+- Configure node autoscaling using Karpenter or Cluster Autoscaler.
+- Use IAM Roles for Service Accounts (IRSA) or EKS Pod Identity for AWS permissions.
+- Configure production monitoring, logging, network policies and access controls.
+
+### Kubernetes Evidence
+
+Screenshots are maintained in `docs/screenshots/kubernetes/`.
+
 
 ## Observability Stack
 
