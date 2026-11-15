@@ -1,10 +1,14 @@
+
 name: Deploy to EC2
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
+    paths:
+      - "app/**"
+      - "Dockerfile"
+      - "docker-compose.yml"
 
 permissions:
   contents: read
