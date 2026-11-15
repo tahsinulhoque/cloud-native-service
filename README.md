@@ -2,7 +2,7 @@
 
 A production-oriented Python FastAPI application built as part of a DevOps Engineer technical assessment. This project demonstrates application development, containerization, CI/CD automation, Infrastructure as Code, Kubernetes deployment, and observability practices.
 
-**Project Status:** Step 1 – Completed | Step 2 – Completed | Step 3 – Completed | Step 4 – Completed | Step 5 – Completed | Step 6 – Completed
+**Assessment Status:** Steps 1–6 implemented and tested | Step 7 documentation completed. AWS staging deployment has been tested successfully; destroy the staging resources after preserving the final evidence. The S3 Terraform state backend is retained.
 
 ---
 
@@ -31,7 +31,7 @@ The project focuses on:
 | Testing | Pytest |
 | Containerization | Docker |
 | Local Orchestration | Docker Compose |
-| CI/CD | GitHub Actions (in progress) |
+| CI/CD | GitHub Actions (implemented and tested) |
 | Infrastructure as Code | Terraform |
 | Cloud Provider | AWS |
 | Infrastructure Monitoring | CloudWatch |
@@ -54,24 +54,15 @@ cloud-native-service/
 │   └── test_app.py
 │
 ├── terraform/
-│   ├── environments/
-│   │   ├── staging.tfvars
-│   │   └── production.tfvars
-│   ├── main.tf
-│   ├── backend.tf
-│   ├── variables.tf
-│   ├── outputs.tf
-│   ├── vpc.tf
-│   ├── ec2.tf
-│   ├── iam.tf
-│   ├── security.tf
-│   ├── cloudwatch.tf
-│   └── bootstrap.sh
+│   ├── *.tf                  # VPC, EC2, IAM, OIDC, security, backend, outputs
+│   ├── bootstrap.sh
+│   └── environments/         # Environment variable files, if used
 │
 ├── docs/
 │   ├── architecture/
 │   │   └── architecture.png
 │   └── screenshots/
+│       └── ci_cd/             # CI, deployment, health-check and rollback evidence
 │
 ├── .github/
 │   └── workflows/
@@ -284,7 +275,7 @@ These are different Docker-reported measurements; use the 50.3 MB content-size f
 
 Terraform is used to provision and manage the AWS infrastructure required to deploy the application.
 
-The same Terraform configuration supports separate staging and production environments through variable files and Terraform workspaces.
+The same Terraform configuration supports staging and production through the `environment` variable and environment-specific input values. The assessment deployment used the default Terraform workspace with `environment=staging`; separate named Terraform workspaces are not required for this configuration.
 
 ## Architecture Overview
 
@@ -427,14 +418,9 @@ Terraform state is stored remotely in Amazon S3.
 | State Locking | `use_lockfile = true` |
 | Workspace Prefix | `cloud-native-service` |
 
-Separate Terraform workspaces are used:
+The same Terraform configuration accepts an `environment` variable, allowing staging and production settings to be selected without maintaining separate copies of the infrastructure code. The active assessment deployment was applied with `environment=staging`.
 
-- `staging`
-- `production`
-
-This keeps the two environments' Terraform states separate.
-
-The S3 backend bucket is retained after infrastructure testing so the remote state backend remains available.
+The S3 backend bucket is retained after infrastructure testing so the remote state backend remains available. The backend bucket is separate from the staging application resources managed by this configuration.
 
 ## 6. Environment Configuration
 
@@ -466,136 +452,145 @@ Replace `YOUR_TRUSTED_IP` with the appropriate trusted IP address before deploym
 
 ## 7. Terraform Commands
 
-Initialize Terraform:
+Run these commands from the `terraform/` directory.
+
+Initialize the backend and providers:
 
 ```powershell
 terraform init
 ```
 
-Check available workspaces:
+Format and validate the configuration:
 
 ```powershell
-terraform workspace list
+terraform fmt
+terraform validate
 ```
 
-Select staging:
+Create a staging plan (replace the CIDR with your current trusted public IP):
 
 ```powershell
-terraform workspace select staging
+terraform plan '-var=environment=staging' '-var=ssh_allowed_cidr=YOUR_PUBLIC_IP/32'
 ```
 
-Create staging plan:
+Apply only after reviewing the plan:
 
 ```powershell
-terraform plan -var-file="environments/staging.tfvars" -out="staging.tfplan"
+terraform apply '-var=environment=staging' '-var=ssh_allowed_cidr=YOUR_PUBLIC_IP/32'
 ```
 
-Apply staging configuration:
+Review outputs:
 
 ```powershell
-terraform apply "staging.tfplan"
+terraform output
 ```
 
-Select production:
+The production environment can be planned by setting `environment=production` and supplying the appropriate trusted CIDR. Production resources were not applied as part of this assessment.
+
+After saving deployment evidence and completing the review, destroy the staging application infrastructure:
 
 ```powershell
-terraform workspace select production
+terraform destroy '-var=environment=staging' '-var=ssh_allowed_cidr=YOUR_PUBLIC_IP/32'
 ```
 
-Create production plan:
-
-```powershell
-terraform plan -var-file="environments/production.tfvars" -out="production.tfplan"
-```
-
-Apply production only when an actual production deployment is intended:
-
-```powershell
-terraform apply "production.tfplan"
-```
-
-Destroy staging infrastructure after testing:
-
-```powershell
-terraform workspace select staging
-
-terraform destroy -var-file="environments/staging.tfvars"
-```
-
-**Note:** Production infrastructure was planned and validated but was not applied during this assessment. Staging infrastructure was successfully deployed, tested, and destroyed.
+Review the destroy plan carefully before confirming. The remote S3 backend bucket is retained; do not delete it as part of the staging cleanup.
 
 ## 8. Terraform Verification Results
 
 | Verification | Result |
 |---|---|
-| Staging Terraform Plan | Successful |
-| Staging Terraform Apply | Successful |
-| EC2 Deployment | Successful |
-| Application Health Check | Healthy |
-| Environment Configuration | staging |
-| CloudWatch Log Delivery | Verified |
-| CloudWatch Retention | 7 days |
-| Production Terraform Plan | Successful |
-| Production Plan – Resources | 12 to add, 0 to change, 0 to destroy |
-| Staging Cleanup | 12 resources destroyed |
-| Staging Workspace State | Empty |
-| Production Workspace State | Empty |
+| Terraform formatting | Successful |
+| Terraform validation | Successful |
+| Staging Terraform plan | Successful |
+| Staging Terraform apply | Successful |
+| GitHub Actions OIDC role trust update | Successful |
+| EC2 deployment target | Provisioned |
+| SSM connectivity | Verified |
+| Application health endpoint | Healthy |
+| CloudWatch log delivery | Verified |
+| CloudWatch retention | 7 days |
+| Production configuration | Supported by variables; not applied |
 
-Both environments use separate Terraform workspaces. The production plan was generated successfully without applying production infrastructure.
+The staging deployment was tested in `us-west-2`. The application health endpoint returned `status=healthy` and `environment=staging`. Staging resources must be destroyed after final evidence capture, as required by the assessment. The S3 state backend is intentionally retained.
 
 ## 9. Terraform Evidence
 
-Screenshots are maintained in `docs/screenshots/`.
-
-| Evidence | Screenshot |
-|---|---|
-| Staging Terraform Plan | `01-staging-plan.png` |
-| Staging Terraform Apply | `02-staging-apply.png` |
-| Application Health Check | `03-application-health.png` |
-| CloudWatch Log Stream | `04-cloudwatch-log-stream.png` |
-| CloudWatch Log Events | `05-cloudwatch-log-events.png` |
-| CloudWatch Retention | `06-cloudwatch-retention.png` |
-| Production Terraform Plan | `07-production-plan.png` |
-| Staging Terraform Destroy | `08-staging-destroy.png` |
-
----
+Terraform evidence is maintained under `docs/screenshots/` (see the repository for the exact filenames). Keep the successful plan, apply, application health, CloudWatch logging/retention, and final staging destroy evidence. The current CI/CD screenshots are stored separately under `docs/screenshots/ci_cd/`.
 
 ## CI/CD Pipeline – GitHub Actions
 
-**Status: Completed**
+**Status: Implemented and tested**
 
-The CI/CD pipeline has been implemented and completed according to the assessment requirements using GitHub Actions. It automates code validation, security scanning, Docker image building, publishing, deployment, and post-deployment verification.
+GitHub Actions provides pull-request validation, container image build and publishing, and deployment to the Terraform-provisioned EC2 staging instance.
 
-### Implemented Workflow
+### Pull Request validation
 
-**Pull Request Validation**
-- Python code linting and unit testing
-- Test coverage reporting
-- Dockerfile linting with Hadolint
-- Shell script linting with ShellCheck
-- Trivy vulnerability scanning with failure on CRITICAL vulnerabilities
+The CI workflow performs:
 
-**Build and Release**
-- Multi-architecture Docker image builds (`linux/amd64` and `linux/arm64`)
-- Docker image tagging using commit SHA and semantic versions
-- Container image publishing to the configured registry
-- Docker layer caching to optimize build performance
+- Python linting and unit tests with coverage.
+- Dockerfile linting with Hadolint.
+- Shell script linting with ShellCheck.
+- Docker image build and Trivy vulnerability scanning.
+- Failure on CRITICAL vulnerabilities.
 
-**Deployment and Verification**
-- Automated deployment to the EC2 instance
-- Secure deployment authentication
-- Post-deployment `/health` endpoint smoke testing
-- Automatic rollback if deployment or health verification fails
+### Build and publish on `main`
 
-### Security and Secrets Management
+The release workflow:
 
-The workflow avoids hardcoded credentials and uses GitHub Actions Secrets for sensitive values and GitHub Actions Variables for non-sensitive configuration. AWS authentication uses the configured deployment access method, with short-lived OIDC credentials preferred where supported.
+- Builds multi-platform images for `linux/amd64` and `linux/arm64`.
+- Uses Docker Buildx layer caching.
+- Tags images with the Git commit SHA and a semantic version.
+- Publishes the images to Docker Hub.
 
-No secret values are stored in the repository.
+The commit-SHA tag is used for deployment traceability; the semantic version provides a human-readable release identifier. The workflow does not rely on `latest` as the only deployment reference.
 
+### EC2 deployment
 
+The deployment workflow:
 
----
+1. Authenticates to AWS using GitHub Actions OIDC and the dedicated IAM role.
+2. Verifies the required AWS configuration and EC2 Systems Manager connectivity.
+3. Sends the deployment command to EC2 using SSM `AWS-RunShellScript`.
+4. Pulls the image identified by the commit SHA.
+5. Preserves the currently running container as a rollback candidate.
+6. Starts the new container and checks `http://localhost/health`.
+7. Removes the backup only after the health check succeeds; on failure, restores the previous container.
+
+The deployment was verified on the staging EC2 instance. OIDC authentication, required configuration validation, and SSM connectivity passed. The deployment was retried after the image was available in Docker Hub and the user confirmed that the deployment completed. The public health endpoint was also verified to return `healthy` in the `staging` environment.
+
+**Operational note:** the deployment workflow is triggered by a push to `main`. The CI workflow must publish the commit-SHA image before the deployment step can pull it. If deployment starts before the image is available in the registry, rerun the deployment after the CI image-publish job has completed.
+
+### GitHub Actions secrets and variables
+
+Configure these in **Repository → Settings → Secrets and variables → Actions**. Use the exact names referenced by the workflow files.
+
+| Name | Type | Purpose |
+|---|---|---|
+| `AWS_ROLE_ARN` | Secret | ARN of the GitHub Actions IAM role assumed through OIDC |
+| `AWS_REGION` | Variable | AWS deployment region (`us-west-2` for this project) |
+| `EC2_INSTANCE_ID` | Variable | Target staging EC2 instance ID |
+| Docker Hub username | Secret, if referenced by CI workflow | Registry authentication |
+| Docker Hub access token | Secret | Registry authentication for image publishing |
+
+The deployment workflow uses `id-token: write` and `contents: read`. The AWS role trust policy restricts federation to this repository and the `main` branch using GitHub's immutable repository/owner subject identifiers. No AWS access key or secret key is stored in the repository.
+
+Do not commit access tokens, passwords, `.env` files, Terraform state files, or generated plan files containing sensitive values.
+
+### CI/CD evidence
+
+The screenshots are committed under `docs/screenshots/ci_cd/`:
+
+| Evidence | File |
+|---|---|
+| EC2 deployment success | `ec2-deployment-success.png` |
+| Final deployment success | `final-deployment-success.png` |
+| GitHub Actions CI pipeline success | `GitHub-Actions-CI-Pipeline-Success_19.png` |
+| Application health check | `health-check-success.png` |
+| Multi-architecture Docker Hub publishing | `multi-architecture-dockerhub-publishing_20.png` |
+| Rollback SSM command output | `rollback-ssm-command-output.png` |
+| Rollback failure diagnostic | `rollback-test-failure-diagnostic.png` |
+
+The rollback evidence records the intentional failed health-check test, the SSM rollback output, and the restored application health. These files are evidence of the tested rollback path; the diagnostic screenshot is not a successful deployment screenshot.
 
 ## Kubernetes Deployment
 
@@ -1015,7 +1010,7 @@ The script records each execution in `health_log.txt`.
 
 ## Architecture – End-to-End Workflow
 
-The following diagram illustrates the CI/CD workflow, AWS infrastructure, local Kubernetes deployment, observability stack, and Linux system-health automation. The CI/CD section is still in progress; any release/deployment path not yet automated should be treated as the intended workflow rather than a completed pipeline.
+The following diagram illustrates the implemented CI/CD workflow, AWS staging deployment, local Kubernetes deployment, observability stack, and Linux system-health automation.
 
 ![Cloud Native Service Architecture](docs/architecture/architecture.png)
 
@@ -1029,7 +1024,7 @@ The following diagram illustrates the CI/CD workflow, AWS infrastructure, local 
 - **Prometheus metrics:** Provides a standard format for application monitoring.
 - **Terraform:** Enables repeatable and version-controlled infrastructure provisioning.
 - **S3 Remote State:** Provides centralized Terraform state storage with state locking.
-- **Separate Workspaces:** Keeps staging and production state isolated.
+- **Environment configuration:** Reuses the same Terraform resources for staging and production by changing input variables rather than maintaining duplicate infrastructure code.
 - **IAM Instance Profile:** Avoids static AWS credentials on EC2.
 - **CloudWatch Logs:** Centralizes application logs with a defined retention period.
 - **Alpine vs Distroless:** Alpine provides a small image with basic shell utilities that simplify troubleshooting. Distroless offers a smaller runtime attack surface but makes debugging more difficult. The project uses a multi-stage Docker build and a minimal runtime image to balance image size, security and operational simplicity. 
@@ -1040,32 +1035,44 @@ The following diagram illustrates the CI/CD workflow, AWS infrastructure, local 
 
 ## Deployment & Rollback Strategy
 
-The intended deployment workflow (not yet fully automated in the current repository):
+### Release flow
 
-1. Validate code changes through CI.
-2. Build and scan the container image.
-3. Tag the image using the commit SHA and semantic version.
-4. Publish the image to a container registry.
-5. Deploy the image to EC2 using SSM or SSH.
-6. Run a health-check smoke test.
-7. Restore the previous image if deployment fails.
+1. A pull request triggers code linting, unit tests, coverage reporting, Hadolint, ShellCheck, image build, and Trivy scanning.
+2. A push to `main` triggers a multi-architecture image build with layer caching.
+3. The image is tagged with the commit SHA and semantic version and pushed to Docker Hub.
+4. The deployment workflow assumes the AWS deployment role through GitHub OIDC.
+5. GitHub Actions uses SSM to run the deployment script on the EC2 staging instance.
+6. The script pulls the commit-SHA image, preserves the previous container, starts the new container, and checks `/health`.
+7. If the health check succeeds, the previous container is removed. If the deployment or health check fails, the script restores and starts the previous container.
 
-The deployment steps above describe the intended safe release workflow. The current project demonstrates CI validation, container image build and scanning, infrastructure provisioning, and deployment-related configuration. Any deployment automation not implemented in the repository is considered a planned improvement rather than a completed capability.
+The current deployment target is the staging EC2 environment. A production release should use the same reviewed process with production-specific Terraform variables, IAM scope, secrets, approvals, and an explicitly selected production target. Production infrastructure was not applied during this assessment.
 
-For rollback, retain the previously deployed image tag. If the new release fails its health check, redeploy the previous known-good image and verify application health before considering the rollback complete.
+### Rollback
+
+The EC2 deployment script keeps the previous container until the new container passes its health check. On failure it removes the failed container, renames the backup container to the application name, and starts it again. The rollback test was intentionally triggered using a failing health-check path; the SSM output recorded the rollback and the application health endpoint was subsequently verified as healthy.
+
+For Kubernetes, the previous Deployment revision can be restored with:
+
+```powershell
+kubectl rollout undo deployment/cloud-native-service
+kubectl rollout status deployment/cloud-native-service
+```
+
+Always verify the running image and readiness of the replicas after rollback.
 
 ## Security Considerations
 
-Implemented security controls and documented practices include:
+Implemented controls and operational practices include:
 
-- **Container security:** The application runs as a non-root user; Kubernetes also uses a read-only root filesystem and disables privilege escalation.
-- **AWS credentials:** The EC2 instance uses an IAM role and instance profile; no static AWS access keys are configured on the instance.
-- **IAM permissions:** The EC2 role is limited to the documented Systems Manager and CloudWatch Logs permissions.
-- **Network exposure:** The EC2 security group exposes HTTP on port 80 and restricts SSH to a trusted `/32` CIDR. Monitoring services other than Grafana remain on the internal Docker network.
-- **Terraform state:** Remote state is stored in an encrypted S3 backend with native S3 state locking.
-- **Image scanning:** Trivy vulnerability scanning is part of the planned/in-progress CI workflow; do not treat the complete CI security gate as finished until the workflow is implemented and verified.
-- **Secrets management:** Local Grafana credentials are supplied through `.env`, which is excluded from Git; `.env.example` documents the required variable names without secret values. Production secrets should be stored in AWS Secrets Manager or Systems Manager Parameter Store. Kubernetes Secret manifests must not contain committed plaintext credentials.
-- **Logging:** Application logs are centrally collected by CloudWatch in AWS and by Alloy/Loki in the local observability stack.
+- **Container security:** The application container runs as a non-root user. The Kubernetes workload uses a non-root security context, disables privilege escalation, and uses a read-only root filesystem.
+- **Image security:** Hadolint and ShellCheck validate container and shell configuration. Trivy scans built images and the CI gate fails on CRITICAL vulnerabilities.
+- **AWS authentication:** GitHub Actions assumes a dedicated IAM role through OIDC; no long-lived AWS access keys are required for deployment. The EC2 instance uses an IAM instance profile for Systems Manager and CloudWatch Logs.
+- **IAM scope:** The GitHub Actions role is restricted by repository/branch OIDC trust conditions and grants the SSM actions required for the deployment target. The EC2 role uses the Systems Manager managed policy and a CloudWatch Logs write policy.
+- **Network exposure:** The EC2 security group allows HTTP on port 80 and restricts SSH to a trusted `/32` CIDR. The observability stack exposes Grafana only to the host; the other monitoring services communicate over the internal Docker network.
+- **Terraform state:** Terraform state is stored in an encrypted S3 backend with S3 native lockfile support. State and plan files must not be committed to Git.
+- **Secrets management:** GitHub credentials and tokens are stored as Actions secrets; non-sensitive deployment settings are Actions variables. Local Grafana credentials are supplied through `.env`, which is excluded from Git. `.env.example` contains placeholders only. Production secrets should use AWS Secrets Manager or Systems Manager Parameter Store.
+- **Kubernetes secrets:** Do not commit plaintext credentials in Kubernetes Secret manifests. Create sensitive values securely at deployment time or integrate an external secrets manager.
+- **Logging:** Application logs are sent to CloudWatch in AWS and collected through Alloy/Loki in the local observability stack. Loki labels are kept low-cardinality; request-specific fields remain structured metadata.
 
 ## AWS Cost Estimation
 
@@ -1088,19 +1095,19 @@ Additional charges may apply for:
 
 This is an indicative estimate, not a guaranteed AWS bill. Actual costs depend on usage, configuration, pricing changes and applicable Free Tier benefits.
 
-The staging infrastructure was destroyed after testing. The S3 Terraform state backend was retained, so its storage and request charges may continue.
+The staging infrastructure was deployed and tested successfully. Destroy the staging application resources after the final evidence review; the S3 Terraform state backend is retained, so its storage and request charges may continue.
 
 
 ## What I Would Improve With More Time
 
-- Stronger application integration testing
-- Automated deployment with rollback
-- Infrastructure policy validation
-- Production-grade secrets management
-- Improved monitoring and alerting
-- Infrastructure cost optimization
-- Kubernetes production deployment on EKS
-- Automated security and compliance checks
+- Add more application integration and failure-mode tests.
+- Add an explicit release approval gate and stronger coordination so deployment starts only after the matching commit-SHA image is published.
+- Add automated Terraform policy checks and drift detection.
+- Integrate production secrets with AWS Secrets Manager or Systems Manager Parameter Store.
+- Extend monitoring with Alertmanager routing and distributed tracing.
+- Optimize AWS costs and add budget alerts.
+- Deploy the Kubernetes workload to Amazon EKS with production-grade ingress, autoscaling, and IAM integration.
+- Add image signing and SBOM generation to the CI pipeline.
 
 ## AI Tool Usage
 
@@ -1109,6 +1116,13 @@ AI tools were used as development assistance for implementation guidance, troubl
 All submitted code, configurations, and infrastructure decisions are reviewed and validated by the candidate, who is responsible for understanding the implementation.
 
 ---
+
+## Final Assessment Notes
+
+- Steps 1–6 have been implemented and tested; this README documents the implementation and operational commands for Step 7.
+- The EC2 staging deployment, OIDC authentication, SSM connectivity, application health check, and rollback path were exercised.
+- The current staging infrastructure should be destroyed after the reviewer-ready evidence is confirmed. Keep the S3 Terraform backend so the remote state remains available.
+- Production infrastructure was not applied. The production configuration is documented as a reusable target, not as a deployed environment.
 
 ## Author
 
