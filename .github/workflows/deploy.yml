@@ -116,7 +116,7 @@ jobs:
           HEALTHY=false
 
           for attempt in {1..12}; do
-            if curl --fail --silent http://localhost/health-rollback-test >/dev/null; then
+            if curl --fail --silent http://localhost/health >/dev/null; then
               HEALTHY=true
               break
             fi
