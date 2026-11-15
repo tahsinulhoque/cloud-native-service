@@ -34,7 +34,7 @@ resource "aws_iam_role" "github_actions" {
           StringEquals = {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
 
-            "token.actions.githubusercontent.com:sub" = "repo:tahsinulhoque/cloud-native-service:ref:refs/heads/main"
+            "token.actions.githubusercontent.com:sub" = "repo:tahsinulhoque@107357207/cloud-native-service@1457556732:ref:refs/heads/main"
           }
         }
       }
