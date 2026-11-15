@@ -2,7 +2,7 @@
 
 A production-oriented Python FastAPI application built as part of a DevOps Engineer technical assessment. This project demonstrates application development, containerization, CI/CD automation, Infrastructure as Code, Kubernetes deployment, and observability practices.
 
-**Project Status:** Step 1 – Completed | Step 2 – In Progress | Step 3 – Completed | Remaining stages – In Progress
+**Project Status:** Step 1 – Completed | Step 2 – In Progress | Step 3 – Completed | Step 4 – Completed | Step 5 – Completed | Step 6 – In Progress
 
 ---
 
@@ -713,29 +713,178 @@ For a production EKS deployment:
 Screenshots are maintained in `docs/screenshots/kubernetes/`.
 
 
+
 ## Observability Stack
 
-**Status: Planned / In Progress**
+**Status: Implemented and Tested**
 
-The observability implementation will include all six required components:
+The local observability stack uses Docker Compose and includes all six required components.
 
 | Component | Purpose |
 |---|---|
-| Prometheus | Metrics collection |
+| Prometheus | Application, host and container metrics collection |
 | Grafana | Dashboards and visualization |
-| Loki | Log aggregation |
-| Grafana Alloy | Log collection and forwarding |
-| Node Exporter | Host metrics |
-| cAdvisor | Container metrics |
+| Loki | Centralized log aggregation |
+| Grafana Alloy | Docker log discovery, parsing and forwarding |
+| Node Exporter | Host-level metrics |
+| cAdvisor | Container-level metrics |
 
-Planned monitoring capabilities:
+### 1. Start the Observability Stack
 
-- Application request rate, error rate, and latency
-- Host CPU, memory, disk, and network usage
-- Per-container CPU and memory utilization
-- Centralized structured JSON logs
-- Grafana dashboards provisioned as code
-- Alerting rules for application and infrastructure health
+Create the environment file:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Set a strong Grafana admin password in `.env`.
+
+Start the application and monitoring services:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+```
+
+Check service status:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.monitoring.yml ps
+```
+
+Access Grafana:
+
+`http://127.0.0.1:3000`
+
+Use the Grafana admin credentials configured in `.env`.
+
+Stop the stack:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.monitoring.yml down
+```
+
+### 2. Metrics Collection
+
+Prometheus scrapes metrics from three targets:
+
+| Target | Metrics |
+|---|---|
+| Application (`app:8000/metrics`) | Request count, error count and latency |
+| Node Exporter (`node-exporter:9100`) | Host CPU, memory, disk and network |
+| cAdvisor (`cadvisor:8080`) | Container CPU and memory |
+
+Prometheus configuration is maintained in:
+
+`monitoring/prometheus/prometheus.yml`
+
+Prometheus data retention is explicitly configured to **15 days**.
+
+### 3. Log Collection
+
+Grafana Alloy discovers Docker containers and collects their logs through Docker service discovery. It forwards the logs to Loki.
+
+The Alloy configuration parses structured JSON application logs.
+
+To keep label cardinality low:
+
+- `level` is stored as a Loki label.
+- `path`, `method`, `status_code` and `environment` are stored as structured metadata.
+
+This allows log filtering without creating high-cardinality labels.
+
+Loki retention is configured to **168 hours (7 days)**.
+
+Configuration files:
+
+- `monitoring/alloy/config.alloy`
+- `monitoring/loki/loki-config.yml`
+
+### 4. Grafana Dashboards
+
+Grafana data sources and dashboards are provisioned from repository configuration files.
+
+Provisioning directories:
+
+- `monitoring/grafana/provisioning/datasources/`
+- `monitoring/grafana/provisioning/dashboards/`
+
+Dashboard JSON files:
+
+- `monitoring/grafana/dashboards/application.json`
+- `monitoring/grafana/dashboards/host.json`
+- `monitoring/grafana/dashboards/containers.json`
+
+#### Application Dashboard
+
+Displays request rate, error rate, p50/p95/p99 latency and application logs from Loki.
+
+![Application Dashboard](docs/screenshots/observability/application-dashboard/application-dashboard.png)
+
+#### Host Dashboard
+
+Displays host CPU, memory, disk and network usage using Node Exporter.
+
+![Host Dashboard](docs/screenshots/observability/host-dashboard/host-dashboard_1.png)
+
+#### Containers Dashboard
+
+Displays per-container CPU usage, memory usage and memory usage relative to configured limits using cAdvisor.
+
+![Containers Dashboard](docs/screenshots/observability/containers-dashboard/containers-dashboard.png)
+
+### 5. Alerting Rules
+
+Four Prometheus alert rules are configured in:
+
+`monitoring/prometheus/alerts.yml`
+
+| Alert | Condition | For | Reason |
+|---|---|---|---|
+| ApplicationDown | Application target is down | 1 minute | Avoids alerts for brief scrape interruptions |
+| HighErrorRate | Error rate exceeds 5% | 2 minutes | Detects sustained application errors rather than short spikes |
+| HostDiskUsageHigh | Disk usage exceeds 80% | 5 minutes | Provides time to investigate before disk capacity becomes critical |
+| ContainerMemoryNearLimit | Container memory exceeds 90% of its limit | 2 minutes | Warns before the container reaches its memory limit |
+
+### 6. Host Resource Access
+
+Node Exporter and cAdvisor require access to host-level resources to collect system and container metrics.
+
+**Node Exporter mounts:**
+
+- `/:/host:ro` — read-only host filesystem access for host metrics.
+
+**cAdvisor mounts and privileges:**
+
+- `/:/rootfs:ro` — host root filesystem visibility.
+- `/var/run:/var/run:ro` — runtime information.
+- `/sys:/sys:ro` — kernel and cgroup metrics.
+- `/var/lib/docker:/var/lib/docker:ro` — Docker container metadata.
+- `/dev/disk:/dev/disk:ro` — disk device information.
+- `/dev/kmsg` — kernel message access.
+- `privileged: true` — access required for container and host resource monitoring.
+
+The filesystem mounts are read-only to limit modification of host resources.
+
+### 7. Network and Security
+
+- Grafana is the only monitoring component exposed to the host, bound to `127.0.0.1:3000`.
+- Prometheus, Loki, Alloy, Node Exporter and cAdvisor communicate through the internal Docker network.
+- Grafana admin credentials are provided through environment variables.
+- `.env` is excluded from Git; `.env.example` documents the required variables.
+- All monitoring container images use pinned versions.
+
+### 8. Investigating an Application Error Spike
+
+When an error spike appears on the Application Dashboard:
+
+1. Check the error rate and request rate panels to identify when the spike started.
+2. Compare the p50, p95 and p99 latency panels to determine whether response times increased.
+3. Use the Loki logs panel beside the application metrics to inspect application errors around the same time.
+4. Filter logs by the `level` label and inspect structured metadata such as `path`, `method` and `status_code`.
+5. Identify the affected endpoint and HTTP status code.
+6. Correlate the errors with request rate and latency to narrow down the likely application issue.
+
+This workflow uses Prometheus metrics and Loki logs together in Grafana to investigate application errors.
 
 ---
 
