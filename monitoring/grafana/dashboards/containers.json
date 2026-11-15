@@ -1,0 +1,68 @@
+
+{
+  "id": null,
+  "uid": "containers-dashboard",
+  "title": "Containers Dashboard",
+  "tags": ["cloud-native", "containers"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Container CPU Usage (cores)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 0},
+      "targets": [
+        {
+          "expr": "sum by (id) (rate(container_cpu_usage_seconds_total{id=~\"/docker/.+\"}[5m]))",
+          "legendFormat": "{{id}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Container Memory Usage (MiB)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 0},
+      "targets": [
+        {
+          "expr": "container_memory_working_set_bytes{id=~\"/docker/.+\"} / 1024 / 1024",
+          "legendFormat": "{{id}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Container Memory Usage vs Limit (%)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 9},
+      "targets": [
+        {
+          "expr": "100 * container_memory_working_set_bytes{id=~\"/docker/.+\"} / container_spec_memory_limit_bytes{id=~\"/docker/.+\"} and container_spec_memory_limit_bytes{id=~\"/docker/.+\"} > 0",
+          "legendFormat": "{{id}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

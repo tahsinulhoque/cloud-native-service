@@ -1,0 +1,58 @@
+
+groups:
+  - name: cloud-native-service-alerts
+    rules:
+      - alert: ApplicationDown
+        expr: up{job="cloud-native-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Application instance is down"
+          description: "The application has been unreachable for more than 1 minute."
+
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_errors_total[5m]))
+            /
+            clamp_min(sum(rate(http_requests_total[5m])), 0.001)
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High application error rate"
+          description: "Application error rate has exceeded 5% for 2 minutes."
+
+      - alert: HostDiskUsageHigh
+        expr: |
+          (
+            1 -
+            node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}
+            /
+            node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}
+          ) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host disk usage is above 80%"
+          description: "Host filesystem disk usage has exceeded 80% for 5 minutes."
+
+      - alert: ContainerMemoryNearLimit
+        expr: |
+          (
+            container_memory_working_set_bytes{id=~".*\\.scope", job="cadvisor"}
+            /
+            on(id)
+            (
+              container_spec_memory_limit_bytes{id=~".*\\.scope", job="cadvisor"} > 0
+            )
+          ) * 100 > 90
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container memory is near its limit"
+          description: "Container memory usage has exceeded 90% of its configured limit for 2 minutes."
