@@ -19,16 +19,21 @@ resource "aws_iam_role" "github_actions" {
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
+
     Statement = [
       {
         Effect = "Allow"
+
         Principal = {
           Federated = aws_iam_openid_connect_provider.github.arn
         }
+
         Action = "sts:AssumeRoleWithWebIdentity"
+
         Condition = {
           StringEquals = {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+
             "token.actions.githubusercontent.com:sub" = "repo:tahsinulhoque/cloud-native-service:ref:refs/heads/main"
           }
         }
@@ -49,31 +54,47 @@ resource "aws_iam_role_policy" "github_actions_ssm" {
 
   policy = jsonencode({
     Version = "2012-10-17"
+
     Statement = [
       {
-        Sid      = "AllowRunCommandOnProjectInstances"
-        Effect   = "Allow"
-        Action   = "ssm:SendCommand"
-        Resource = "arn:aws:ec2:us-west-2:*:instance/*"
-        Condition = {
-          StringEquals = {
-            "ssm:resourceTag/Project" = var.project_name
-          }
-        }
+        Sid    = "AllowRunCommandOnTargetInstance"
+        Effect = "Allow"
+
+        Action = [
+          "ssm:SendCommand"
+        ]
+
+        Resource = aws_instance.app.arn
       },
       {
-        Sid      = "AllowAWSRunShellScript"
-        Effect   = "Allow"
-        Action   = "ssm:SendCommand"
-        Resource = "arn:aws:ssm:us-west-2::document/AWS-RunShellScript"
+        Sid    = "AllowAWSRunShellScript"
+        Effect = "Allow"
+
+        Action = [
+          "ssm:SendCommand"
+        ]
+
+        Resource = "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript"
+      },
+      {
+        Sid    = "DescribeSSMInstances"
+        Effect = "Allow"
+
+        Action = [
+          "ssm:DescribeInstanceInformation"
+        ]
+
+        Resource = "*"
       },
       {
         Sid    = "ReadCommandExecutionStatus"
         Effect = "Allow"
+
         Action = [
           "ssm:GetCommandInvocation",
           "ssm:ListCommandInvocations"
         ]
+
         Resource = "*"
       }
     ]
