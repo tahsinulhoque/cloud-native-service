@@ -3,4 +3,6 @@ kind: ConfigMap
 metadata:
   name: cloud-native-config
 data:
+  PORT: "8000"
+  LOG_LEVEL: "INFO"
   ENVIRONMENT: "development"
