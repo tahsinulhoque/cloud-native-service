@@ -972,63 +972,10 @@ The script records each execution in `health_log.txt`.
 
 ## Architecture – End-to-End Workflow
 
-The overall assessment architecture:
+The following diagram illustrates the project's CI/CD pipeline, AWS infrastructure, Kubernetes deployment, observability stack, and Linux automation.
 
-```text
-Developer
-    |
-    v
-GitHub Repository
-    |
-    v
-GitHub Actions
-    |
-    +-- Linting
-    +-- Unit Testing
-    +-- Coverage
-    +-- Security Scanning
-    |
-    v
-Container Registry
-    |
-    v
-AWS EC2 Deployment
-    |
-    v
-Docker Application
-    |
-    +-- Health Check
-    +-- CloudWatch Logs
+![Cloud Native Service Architecture](docs/architecture/architecture.png)
 
-
-Separate Kubernetes Deployment:
-Application Image
-    |
-    v
-Local Kubernetes Cluster
-    |
-    v
-Deployment / Service / HPA
-
-
-Observability:
-Application + Host + Containers
-              |
-              v
-       Prometheus / Alloy
-              |
-        +-----+-----+
-        |           |
-        v           v
-     Metrics       Loki
-        |           |
-        +-----+-----+
-              |
-              v
-            Grafana
-```
-
----
 
 ## Design Decisions
 
@@ -1042,6 +989,11 @@ Application + Host + Containers
 - **Separate Workspaces:** Keeps staging and production state isolated.
 - **IAM Instance Profile:** Avoids static AWS credentials on EC2.
 - **CloudWatch Logs:** Centralizes application logs with a defined retention period.
+- **Alpine vs Distroless:** Alpine provides a small image with basic shell utilities that simplify troubleshooting. Distroless offers a smaller runtime attack surface but makes debugging more difficult. The project uses a multi-stage Docker build and a minimal runtime image to balance image size, security and operational simplicity. 
+- **EC2 vs ECS vs EKS:** EC2 was selected for direct control over the host and a straightforward deployment model. ECS would reduce container orchestration overhead, while EKS would provide managed Kubernetes but introduce additional operational complexity and cost. Kubernetes manifests are also included to demonstrate container orchestration.
+- **Image tagging:** Images use version tags and commit-based tags to support traceability and rollback. Mutable tags such as `latest` should not be used as the only production deployment reference.
+- **Secrets management:** Local credentials are kept in an ignored `.env` file. Production secrets should be stored in AWS Secrets Manager or Systems Manager Parameter Store rather than committed to Git.
+- **Log labels:** Only low-cardinality fields such as `level` are used as Loki labels. Request-specific fields such as `path`, `method` and `status_code` are kept as structured metadata to avoid excessive label cardinality.
 
 ## Deployment & Rollback Strategy
 
@@ -1054,6 +1006,10 @@ The intended deployment workflow:
 5. Deploy the image to EC2 using SSM or SSH.
 6. Run a health-check smoke test.
 7. Restore the previous image if deployment fails.
+
+The deployment steps above describe the intended safe release workflow. The current project demonstrates CI validation, container image build and scanning, infrastructure provisioning, and deployment-related configuration. Any deployment automation not implemented in the repository is considered a planned improvement rather than a completed capability.
+
+For rollback, retain the previously deployed image tag. If the new release fails its health check, redeploy the previous known-good image and verify application health before considering the rollback complete.
 
 ## Security Considerations
 
@@ -1071,20 +1027,27 @@ The project follows these security practices:
 
 ## AWS Cost Estimation
 
-The assessment uses AWS resources suitable for a small deployment.
+The following is a rough monthly estimate for a small production deployment in **US West (Oregon), us-west-2**, based on the Terraform configuration.
 
-The actual cost depends on:
+**Assumptions:** One Linux EC2 `t3.micro` instance running 24/7 for approximately 730 hours per month, with a 20 GB gp3 EBS volume and one public IPv4 address.
 
-- AWS region
-- EC2 instance runtime
-- EBS storage
-- Network traffic
-- CloudWatch log ingestion and retention
-- S3 storage
+| AWS Resource | Estimated Monthly Cost (USD) |
+|---|---:|
+| EC2 t3.micro (On-Demand) | $7.59 |
+| EBS gp3 storage (20 GB, assumed) | $1.60 |
+| Public IPv4 address | $3.65 |
+| **Estimated baseline total** | **$12.84** |
 
-The staging infrastructure was destroyed after testing. The S3 backend bucket was retained for Terraform state management.
+Additional charges may apply for:
+- CloudWatch log ingestion and storage.
+- Outbound data transfer.
+- Additional storage or AWS services.
+- CPU credit charges if the T3 instance operates in Unlimited mode above its earned credits.
 
-A production monthly cost estimate will be documented separately.
+This is an indicative estimate, not a guaranteed AWS bill. Actual costs depend on usage, configuration, pricing changes and applicable Free Tier benefits.
+
+The staging infrastructure was destroyed after testing. The S3 Terraform state backend was retained, so its storage and request charges may continue.
+
 
 ## What I Would Improve With More Time
 
