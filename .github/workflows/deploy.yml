@@ -1,28 +1,29 @@
 name: Deploy to EC2
 
 on:
-  workflow_run:
-    workflows: ["CI Pipeline"]
-    types:
-      - completed
+  push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: Deploy application to EC2
-    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
 
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
       EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
       DOCKERHUB_USERNAME: tahsinuldev
-      IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
+      IMAGE_TAG: ${{ github.sha }}
 
     steps:
       - name: Configure AWS credentials using OIDC
@@ -36,23 +37,19 @@ jobs:
         run: |
           set -euo pipefail
 
-          test -n "$AWS_REGION" || {
-            echo "AWS_REGION is missing"
-            exit 1
-          }
-
-          test -n "$EC2_INSTANCE_ID" || {
-            echo "EC2_INSTANCE_ID is missing"
-            exit 1
-          }
+          test -n "$AWS_REGION"
+          test -n "$EC2_INSTANCE_ID"
 
           echo "AWS configuration verified."
 
       - name: Verify EC2 SSM connectivity
+        shell: bash
         run: |
+          set -euo pipefail
+
           aws ssm describe-instance-information \
             --filters "Key=InstanceIds,Values=${EC2_INSTANCE_ID}" \
-            --region "${AWS_REGION}"
+            --region "$AWS_REGION"
 
       - name: Deploy image through SSM with automatic rollback
         shell: bash
@@ -83,12 +80,9 @@ jobs:
             fi
           }
 
-          # Pull the new application image
           docker pull "\$NEW_IMAGE"
 
-          # Preserve the currently running container
           if docker inspect "\$BACKUP" >/dev/null 2>&1; then
-            echo "Removing stale backup container."
             docker rm -f "\$BACKUP"
           fi
 
@@ -97,14 +91,13 @@ jobs:
             docker rename "\$CONTAINER" "\$BACKUP"
           fi
 
-          # Start the new application version
           if ! docker run -d \
             --name "\$CONTAINER" \
             --restart unless-stopped \
             -e ENVIRONMENT=staging \
             -p 80:8000 \
             --log-driver=awslogs \
-            --log-opt awslogs-region=us-west-2 \
+            --log-opt awslogs-region="${AWS_REGION}" \
             --log-opt awslogs-group=/cloud-native-service/staging \
             --log-opt awslogs-create-group=false \
             "\$NEW_IMAGE"; then
@@ -112,7 +105,6 @@ jobs:
             exit 1
           fi
 
-          # Application health smoke test
           HEALTHY=false
 
           for attempt in {1..12}; do
@@ -131,7 +123,6 @@ jobs:
 
           echo "Deployment successful: \$NEW_IMAGE"
 
-          # Remove backup only after successful health check
           if docker inspect "\$BACKUP" >/dev/null 2>&1; then
             docker rm -f "\$BACKUP"
           fi
